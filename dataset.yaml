@@ -1,0 +1,9 @@
+train: images/train
+val: images/val
+nc: 5
+names:
+  0: 'Bilain'
+  1: 'MTC'
+  2: 'Megafon'
+  3: 'T2'
+  4: 'Yota'

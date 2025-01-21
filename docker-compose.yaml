@@ -1,0 +1,12 @@
+version: '3'
+services:
+  model_training:
+    build: .
+    container_name: model_training_container
+    volumes:
+      - ./datasets:/app/datasets
+      - ./models:/app/models
+    ports:
+      - "5000:5000"
+    restart: always
+    command: python train.py && tail -f /dev/null

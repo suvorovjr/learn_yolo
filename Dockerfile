@@ -8,6 +8,6 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY . /app/
 
-RUN sudo apt-get install -y libgl1-mesa-glx
+RUN apt-get install -y libgl1-mesa-glx
 
 CMD python train.py && tail -f /dev/null

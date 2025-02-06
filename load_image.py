@@ -1,3 +1,4 @@
+import multiprocessing
 import asyncio
 import concurrent.futures
 from pathlib import Path
@@ -8,6 +9,8 @@ import numpy as np
 import torch
 from aiohttp import ClientSession
 from ultralytics import YOLO
+
+multiprocessing.set_start_method("spawn", force=True)
 
 # Пути к файлам
 BASE_DIR: Path = Path(__file__).parent
@@ -32,11 +35,6 @@ EVALUATION_COLUMNS = [
     "Интерьер МФ",
     "Интерьер Yota",
 ]
-
-
-YOLO_MODEL = YOLO("best.pt")
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-YOLO_MODEL.to(DEVICE)
 
 
 ### === 1. Работа с файлами === ###
@@ -107,13 +105,18 @@ async def load_images_in_batch(batch_df: pd.DataFrame) -> dict:
 def detect_objects_for_batch(model_path: str, images: list[np.ndarray]) -> list[dict]:
     """Обрабатывает батч изображений в процессе."""
 
-    detections = YOLO_MODEL.predict(images, verbose=False)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = YOLO(model_path)  # Загружаем YOLO в процессе
+    model.to(device)
+
+    detections = model.predict(images, verbose=False)
+
     objects_info_list = []
 
     for result in detections:
         objects_info = defaultdict(int)
         for box, cls in zip(result.boxes.xyxy, result.boxes.cls):
-            label = YOLO_MODEL.names[int(cls)]
+            label = model.names[int(cls)]
             x1, y1, x2, y2 = map(int, box)
             area_px = (x2 - x1) * (y2 - y1)
             objects_info[label] += area_px

@@ -123,18 +123,17 @@ def detect_objects_for_batch(model: YOLO, image: np.ndarray) -> list[dict]:
     """Обрабатывает батч изображений в процессе."""
     detections = model(image)
 
-    objects_info_list = []
+    objects_info = defaultdict(int)
 
     for result in detections:
-        objects_info = defaultdict(int)
+        
         for box, cls in zip(result.boxes.xyxy, result.boxes.cls):
             label = model.names[int(cls)]
             x1, y1, x2, y2 = map(int, box)
             area_px = (x2 - x1) * (y2 - y1)
             objects_info[label] += area_px
-        objects_info_list.append(objects_info)
         print(f"✅ Изображение успешно обработано.")
-    return objects_info_list
+    return objects_info
 
 
 async def detect_objects_in_batch(model_path: str, images: dict) -> dict:

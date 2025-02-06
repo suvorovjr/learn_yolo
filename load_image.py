@@ -34,6 +34,11 @@ EVALUATION_COLUMNS = [
 ]
 
 
+YOLO_MODEL = YOLO("best.pt")
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+YOLO_MODEL.to(DEVICE)
+
+
 ### === 1. Работа с файлами === ###
 def load_data(filename: str, sheet_name: str) -> pd.DataFrame:
     """Загружает данные из Excel."""
@@ -101,21 +106,19 @@ async def load_images_in_batch(batch_df: pd.DataFrame) -> dict:
 
 def detect_objects_for_batch(model_path: str, images: list[np.ndarray]) -> list[dict]:
     """Обрабатывает батч изображений в процессе."""
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = YOLO(model_path)
-    model.to(device)
 
-    detections = model.predict(images, verbose=False)
+    detections = YOLO_MODEL.predict(images, verbose=False)
     objects_info_list = []
 
-    for i, result in enumerate(detections):
+    for result in detections:
         objects_info = defaultdict(int)
         for box, cls in zip(result.boxes.xyxy, result.boxes.cls):
-            label = model.names[int(cls)]
+            label = YOLO_MODEL.names[int(cls)]
             x1, y1, x2, y2 = map(int, box)
             area_px = (x2 - x1) * (y2 - y1)
             objects_info[label] += area_px
         objects_info_list.append(objects_info)
+        print(f"✅ Изображение успешно обработано.")
     return objects_info_list
 
 
@@ -173,7 +176,6 @@ def get_mark(objects_info, operator: str) -> int:
         pixels = 5000
     else:
         pixels = 7500
-        
 
     if any(area > operator_area + pixels for area in other_areas if area != 0):
         return 0
@@ -213,8 +215,8 @@ async def main():
     for batch_num, start in enumerate(range(0, len(df), batch_size), start=1):
         print(f"\n🚀 Обрабатываем батч {batch_num}/{total_batches}...")
 
-        batch_df = df.iloc[start: start + batch_size].copy()
-        await process_batch(batch_df, batch_num) 
+        batch_df = df.iloc[start : start + batch_size].copy()
+        await process_batch(batch_df, batch_num)
     combine_batches()
 
 

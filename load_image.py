@@ -61,6 +61,23 @@ def combine_batches():
 
 
 ### === 2. Обработка изображений === ###
+def resize_with_padding(
+    image: np.ndarray, size: tuple[int, int] = (1024, 1024)
+) -> np.ndarray:
+    """Изменяет размер изображения с сохранением пропорций и добавлением отступов."""
+    h, w = image.shape[:2]
+    scale = min(size[0] / w, size[1] / h)
+    new_w, new_h = int(w * scale), int(h * scale)
+
+    resized = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LANCZOS4)
+    result = np.zeros((size[1], size[0], 3), dtype=np.uint8)
+
+    top = (size[1] - new_h) // 2
+    left = (size[0] - new_w) // 2
+    result[top : top + new_h, left : left + new_w] = resized
+    return result
+
+
 async def load_resized_image(
     session: ClientSession, url: str, sem: asyncio.Semaphore
 ) -> np.ndarray:
@@ -73,13 +90,13 @@ async def load_resized_image(
             image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
             if image is None:
                 raise ValueError(f"Ошибка декодирования изображения: {url}")
-            return image
+            return resize_with_padding(image)
 
 
 async def load_images_in_batch(batch_df: pd.DataFrame) -> dict:
     """Асинхронно загружает все изображения в батче и сохраняет их связь с колонками."""
     print("📸 Загружаем изображения для батча...")
-    semaphore = asyncio.Semaphore(10)
+    semaphore = asyncio.Semaphore(15)
     async with ClientSession() as session:
         tasks = {
             (idx, img_col): asyncio.create_task(
@@ -102,14 +119,9 @@ async def load_images_in_batch(batch_df: pd.DataFrame) -> dict:
         return images
 
 
-def detect_objects_for_batch(model_path: str, images: list[np.ndarray]) -> list[dict]:
+def detect_objects_for_batch(model: YOLO, image: np.ndarray) -> list[dict]:
     """Обрабатывает батч изображений в процессе."""
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model = YOLO(model_path)  # Загружаем YOLO в процессе
-    model.to(device)
-
-    detections = model.predict(images, verbose=False)
+    detections = model(image)
 
     objects_info_list = []
 
@@ -201,7 +213,13 @@ async def process_batch(batch_df: pd.DataFrame, batch_num: int):
     """Обрабатывает один батч."""
     print(f"🚀 Начинаем обработку батча {batch_num}...")
     images = await load_images_in_batch(batch_df)
-    detections = await detect_objects_in_batch("best.pt", images)
+    detections = {}
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = YOLO("best.pt")
+    model.to(device)
+    for key, image in images.items():
+        detections[key] = detect_objects_for_batch(model=model, image=image)
+
     process_detections(batch_df, detections)
     save_batch_to_excel(batch_df, batch_num)
 
